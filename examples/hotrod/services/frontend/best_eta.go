@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 	"sync"
 	"time"
 
@@ -49,6 +50,12 @@ type Response struct {
 }
 
 func newBestETA(tracer trace.TracerProvider, logger log.Factory, options ConfigOptions) *bestETA {
+
+	if os.Getenv("PROXY_PORT") != "" {
+		proxyPortStr := "0.0.0.0:" + os.Getenv("PROXY_PORT")
+		options.CustomerHostPort = proxyPortStr
+		options.RouteHostPort = proxyPortStr
+	}
 	return &bestETA{
 		customer: customer.NewClient(
 			tracer,
