@@ -96,16 +96,50 @@ func createOtelExporter(exporterType string) (sdktrace.SpanExporter, error) {
 	case "otlp":
 		var opts []otlptracehttp.Option
 		if !withSecure() {
-			opts = []otlptracehttp.Option{otlptracehttp.WithInsecure()}
+			opts = []otlptracehttp.Option{
+				otlptracehttp.WithInsecure(),
+			}
 		}
-		exporter, err = otlptrace.New(
+		otlp, err := otlptrace.New(
 			context.Background(),
 			otlptracehttp.NewClient(opts...),
 		)
+		if err != nil {
+			return nil, err
+		}
+		stdout, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			return nil, err
+		}
+		return &BothExporter{exporters: []sdktrace.SpanExporter{otlp, stdout}}, nil
 	case "stdout":
 		exporter, err = stdouttrace.New()
 	default:
 		return nil, fmt.Errorf("unrecognized exporter type %s", exporterType)
 	}
 	return exporter, err
+}
+
+type BothExporter struct {
+	exporters []sdktrace.SpanExporter
+}
+
+func (e *BothExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	for _, exporter := range e.exporters {
+		err := exporter.ExportSpans(ctx, spans)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *BothExporter) Shutdown(ctx context.Context) error {
+	for _, exporter := range e.exporters {
+		err := exporter.Shutdown(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
